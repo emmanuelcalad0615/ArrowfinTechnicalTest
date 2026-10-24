@@ -2,26 +2,26 @@
 
 Technical assessment. A TypeScript backend aggregates 1-minute candles into 5m, 15m, and 1h candles, and a React frontend shows them in a candlestick chart.
 
-| Part | Stack | Status |
-| --- | --- | --- |
-| `backend/` | Node + TypeScript + Express 5 | `GET /health` and `GET /candles` work |
-| `frontend/` | React 19 + TypeScript + Vite 8 | Still the Vite template |
+| Part | Stack |
+| --- | --- |
+| `backend/` | Node + TypeScript + Express 5: `GET /candles` and `GET /health` |
+| `frontend/` | React 19 + TypeScript + Vite 8 + lightweight-charts: symbol and timeframe selectors and a candlestick chart |
 
-## Run with Docker
+## Quick start
 
-Requires only Docker with Compose.
+Requires Docker with Compose for the app, and Node 24 or later for the tests.
 
 ```sh
-docker compose up --build
+docker compose up --build    # backend on http://localhost:3000, app on http://localhost:8080
+npm --prefix backend ci      # install the backend dependencies, once
+npm --prefix backend test    # run the backend tests
 ```
 
-- App: http://localhost:8080 (nginx serves the frontend and forwards `/candles` to the backend).
-- API: http://localhost:3000, for example http://localhost:3000/candles?symbol=MES&tf=5m.
-- Stop with `docker compose down`.
+Stop the app with `docker compose down`. In the app, nginx serves the frontend and forwards `/candles` to the backend.
 
 ## Run without Docker
 
-Requirements: Node 24 or later (Node runs the backend `.ts` files directly) and npm.
+For development. Requires Node 24 or later (Node runs the backend `.ts` files directly) and npm.
 
 ### Setup
 
@@ -63,7 +63,7 @@ npm test              # backend only
 ## Project layout
 
 - `backend/src/`: Clean Architecture layers `domain`, `application`, `infrastructure`, and `presentation`.
-- `frontend/src/`: API module, data-fetching hook, and components (planned).
+- `frontend/src/`: `api/` (fetch and response guards), `hooks/useCandles.ts` (loading, error, empty, and ready states), and `components/` (selectors and chart).
 - `DECISIONS.md`: design decisions, trade-offs, and the log of prompts used during development.
 - `CLAUDE.md` and `.claude/`: instructions, rules, and auditor agents for Claude Code.
 

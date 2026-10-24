@@ -15,7 +15,7 @@ Technical assessment. Two independent npm projects:
 ## Architecture
 
 - Backend: lightweight Clean Architecture with four layers: `domain`, `application`, `infrastructure`, `presentation`. Dependencies point inward only. No over-engineering.
-- Frontend: API module, data-fetching hook, and presentational components.
+- Frontend: API module (`fetch` plus runtime type guards), one data-fetching hook, and presentational components. No UI library.
 - Rules: see the other files in `.claude/rules/`.
 
 ## Folders
@@ -54,24 +54,26 @@ Technical assessment. Two independent npm projects:
 | `backend/src/presentation/http/candles-controller.ts` | `createCandlesHandler(getCandles)`: thin `GET /candles` handler. Validates the query (`400`), calls the use case, maps with `toCandlesResponse()` (`200`) | exists |
 | `backend/src/presentation/http/error-handlers.ts` | `handleNotFound` (`404 NOT_FOUND`) and `handleError` (`500 INTERNAL_ERROR`, generic message, details only in the server log) | exists |
 | `frontend/Dockerfile`, `frontend/nginx.conf` | Builds with Vite, serves `dist` with `nginx:1.29-alpine`, and proxies `/candles` to `backend:3000` (same role as the Vite dev proxy) | exists |
-| `frontend/src/main.tsx`, `App.tsx` | Entry point and root component (still the Vite template) | exists |
-| `frontend/src/api/` | API module: calls `GET /candles` | planned |
-| `frontend/src/hooks/` | Data-fetching hook: loading, error, empty, and ready states; drops stale requests | planned |
-| `frontend/src/components/` | Symbol selector, timeframe selector, candle chart | planned |
+| `frontend/src/main.tsx` | Entry point: mounts `App` into `#root` | exists |
+| `frontend/src/App.tsx` | Root component: holds `symbol` (default `MES`) and `tf` (default `5m`), calls `useCandles`, renders the selectors, the UTC note, and one view per state | exists |
+| `frontend/src/api/candles.ts` | `SYMBOLS`, `TIMEFRAMES`, `ApiCandle`, `fetchCandles()`: calls `GET /candles`, narrows the JSON with type guards, rejects a response for another selection, and never throws (`{ ok: false, message }` with the backend message when there is one) | exists |
+| `frontend/src/hooks/useCandles.ts` | `useCandles(symbol, tf)`: `loading`, `error`, `empty`, or `ready`, plus `retry()`. Aborts the previous request with `AbortController` and keys results by selection, so a stale response is never shown | exists |
+| `frontend/src/components/SelectField.tsx` | Native `<select>` with its `<label>`, generic over the option type, no `as` | exists |
+| `frontend/src/components/CandleChart.tsx` | lightweight-charts 5 candlestick chart: `autoSize` follows the container width, `chart.remove()` on unmount | exists |
+| `frontend/src/components/chart-data.ts` | `toChartCandles()`: API candles to chart points in `UTCTimestamp` seconds, which the chart shows in UTC | exists |
+| `frontend/src/index.css` | Plain CSS: layout, field spacing, 400 px chart height | exists |
 
 ## Request path
 
-Steps 4 to 8 exist; the frontend steps are planned.
-
 1. User changes the symbol or timeframe `<select>`.
-2. The hook cancels the previous request and calls the API module.
+2. `useCandles` aborts the previous request and calls `fetchCandles()`.
 3. The API module sends `GET /candles?symbol=MES&tf=5m`.
 4. The controller validates the query with `parseCandlesQuery()`, which uses the domain guards. Invalid input returns `400`.
 5. The controller calls the use case.
 6. The use case reads 1-minute candles through `CandleRepository`. The infrastructure implementation serves them from memory.
 7. `aggregate()` deduplicates, sorts, and aggregates the candles into `tf` intervals.
 8. The controller maps the result to the response JSON and returns `200`.
-9. The hook moves to the ready or empty state, and the chart renders.
+9. `fetchCandles()` checks the JSON with type guards, `useCandles` moves to `ready` or `empty` (or `error` with the backend message), and `CandleChart` draws the candles.
 
 ## `GET /candles`
 
@@ -119,7 +121,7 @@ Intervals start at `ts` floored to the timeframe, aligned to the UTC clock (14:0
 
 ## Tests
 
-Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `*.test.ts`. A `.only` fails the run.
+Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `*.test.ts`. A `.only` fails the run. The frontend has no automated tests; it was checked by hand in headless Chrome (see known debt).
 
 | Test | Protects | Status |
 | --- | --- | --- |
@@ -162,5 +164,14 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 
 ## Known debt and pending work
 
-- Frontend is still the Vite template.
-- Not decided: how the frontend gets the response types without duplicating them.
+Ordered by importance (from the final review).
+
+1. The frontend has no automated tests. `useCandles` (abort and stale responses), the `fetchCandles()` guards, and the four views were only checked by hand in headless Chrome. This breaks the TDD rule in `CLAUDE.md`.
+2. With the backend down, the proxy answers `502`, so the user sees "Request failed with status 502." instead of a clear "could not reach the server" message.
+3. The frontend repeats `SYMBOLS`, `TIMEFRAMES`, and `ApiCandle` from the backend. The runtime guard catches drift, but only as a generic error, and a contract change needs edits in both projects.
+4. The chart is rebuilt on every data change and unmounted while loading, so zoom is lost and the layout jumps between selections.
+5. The first 1h candle is labeled 13:00 but covers only 13:30–13:59, because the session starts at 13:30. Correct under the UTC clock alignment, but easy to read as a full hour.
+6. The chart has no text alternative for screen readers, and volume (`v`) is fetched but not shown.
+7. `PORT` parsing goes through `Number()`, so `0x10`, `1e3`, and ` 3000 ` are accepted.
+8. `POST /candles` returns `404` instead of `405`, and responses carry `X-Powered-By: Express`.
+9. If two duplicate rows ever had different values, the first would win with no warning. The dataset README says duplicates are identical.

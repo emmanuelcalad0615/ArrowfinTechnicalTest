@@ -71,9 +71,18 @@ Design decisions and trade-offs for this technical assessment, followed by the l
 - **The frontend container starts only after the backend is healthy.** A bad data file stops the backend at startup, so the frontend never starts in front of a broken API.
 - Checked: both images build, `GET /` returns `200`, `/candles` through nginx returns the aggregated JSON, a repeated `tf` returns `400`, and the backend process runs as `node`.
 
+### Frontend (2026-10-24)
+
+- **`fetchCandles()` never throws and checks the JSON at runtime.** `response.json()` is narrowed with type guards, never `as`. A backend error shows the `message` from its JSON; a response whose `symbol` or `tf` does not match the request is rejected, which is what the response envelope was chosen for.
+- **The frontend keeps its own copy of the contract types** (`SYMBOLS`, `TIMEFRAMES`, `ApiCandle`). Sharing the backend files would tie the two npm projects and their builds together, and the frontend must validate the response at runtime anyway. The backend contract tests freeze the shape. Trade-off: a contract change needs edits in both projects (listed in known debt).
+- **`useCandles` aborts the previous request and also keys each result by selection and attempt.** A response is stored with the key it answers, and the view shows `loading` until the result for the current key arrives. Even a response that slips past the abort can never replace newer data. It also avoids a synchronous `setState` inside the effect.
+- **Four explicit states: `loading`, `error`, `empty`, `ready`.** The error view has a Retry button that repeats the request.
+- **lightweight-charts 5.2.1** (approved by the user): `chart.addSeries(CandlestickSeries)`, `autoSize: true` to follow the container width, and `chart.remove()` on unmount. Times are passed as `UTCTimestamp` seconds, which the chart shows in UTC; a type guard produces the branded type without `as`.
+- **No frontend tests**, to fit the time limit. The app was checked by hand in headless Chrome: the chart renders MES 5m from 13:30 to 20:00 UTC, and with the backend stopped the error view and Retry button appear. Listed first in known debt.
+
 ## Time budget
 
-The assessment has a 3-hour limit. Times are approximate, taken from file and commit times. They assume the clock started with the first prompt at about 09:08, so the limit is about 12:08. Done phases show the time actually used; pending phases show the planned budget.
+The assessment has a 3-hour limit. Times are approximate, taken from file and commit times. They assume the clock started with the first prompt at about 09:08, so the limit is about 12:08. Every phase shows the time actually used.
 
 | Phase | Prompts | Time | Minutes | Status |
 | --- | --- | --- | --- | --- |
@@ -82,14 +91,12 @@ The assessment has a 3-hour limit. Times are approximate, taken from file and co
 | Domain: aggregation, timestamps, types, guards, `bucketStart`, normalization | log 17–25 | 10:35–11:07 | ≈ 32 | done |
 | Data access and API: `parseCandle`, repository, use case, query validation, controller, entry point, integration tests | log 26–31, planned 3 and 11 | 11:07–11:28 | ≈ 21 | done |
 | Planning and Docker | log 32–33 | 11:28–11:36 | ≈ 8 | done |
-| Frontend data layer | planned 6 | 11:36–11:44 | 8 | pending |
-| Interface and chart | planned 7 | 11:44–11:56 | 12 | pending |
-| Verification | planned 12 | 11:56–12:00 | 4 | pending |
-| Final review | planned 8 | 12:00–12:03 | 3 | pending |
-| README and map | planned 9 | 12:03–12:06 | 3 | pending |
-| Buffer | | 12:06–12:08 | 2 | |
+| Frontend data layer and interface | log 34, planned 6 and 7 | 11:36–11:39 | ≈ 3 | done |
+| Verification | planned 12 | 11:39–11:40 | ≈ 1 | done |
+| Final review, README, and map | planned 8 and 9 | 11:40–11:42 | ≈ 2 | done |
+| Unused budget | | 11:42–12:08 | ≈ 26 | |
 
-Setup took about 40% of the time. The remaining budget favors the interface, the only pending part with visible output, and keeps verification and review short because most behavior already has tests.
+Setup took about 40% of the time. The planned budget for prompts 6 to 12 was 30 minutes, with most of it for the interface; they took less, so about 26 minutes of the 3 hours were left unused.
 
 ## Planned prompts
 
@@ -109,25 +116,25 @@ Prompts prepared before development, in the user's own numbering. They are recor
 
 ### 6. Frontend data layer
 
-**Status:** pending. **Budget:** 8 minutes. Data from `response.json()` must be narrowed with type guards (`code-quality.md`). Open decision: how the frontend gets the response types without duplicating them by hand.
+**Status:** done (prompt log entry 34): `frontend/src/api/candles.ts` and `frontend/src/hooks/useCandles.ts`. **Budget:** 8 minutes. Data from `response.json()` must be narrowed with type guards (`code-quality.md`). Open decision: how the frontend gets the response types without duplicating them by hand.
 
 > In the frontend, create a module for the API that calls GET /candles and types the response, and a hook useCandles(symbol, tf) that returns the loading, error, and data states. If the user changes the selector quickly, an old response must not overwrite the new one, so cancel the previous request with AbortController. If the response is a backend error, show the message that comes in the JSON.
 
 ### 7. Interface and chart
 
-**Status:** pending. **Budget:** 12 minutes. Needs the `lightweight-charts` dependency (latest is 5.2.1, where series are added with `chart.addSeries(CandlestickSeries)`), which requires the user's approval first.
+**Status:** done (prompt log entry 34) with `lightweight-charts` 5.2.1, approved by the user. **Budget:** 12 minutes.
 
 > Now the interface. A select for the symbol (MES and NQ) and another for the timeframe (1m, 5m, 15m, 1h), both native and with their label. Below them, a candlestick chart with lightweight-charts; check the installed version, because the API changed between versions. The chart adapts to the width of its container and is cleaned up when the component unmounts. While loading it shows a loading message, if there is an error it shows the message with a retry button, and if there are no candles it says so. Make clear that the times are in UTC. Simple styles, no UI libraries.
 
 ### 8. Final review
 
-**Status:** pending. **Budget:** 3 minutes. Can use the auditor agents, which the user may launch on request.
+**Status:** done (prompt log entry 34). The ordered findings are the known debt in `.claude/rules/code-map.md`; nothing was fixed. **Budget:** 3 minutes.
 
 > Review everything we did looking for bugs and cases we missed, especially in the aggregation, the validation, and the state handling in the frontend. Do not fix anything yet; just give me a list ordered by importance.
 
 ### 9. README and map
 
-**Status:** pending. **Budget:** 3 minutes. The README already has setup, run, and Docker instructions; this pass reduces them to 3 commands or fewer and syncs the code map and known debt with the final code.
+**Status:** done (prompt log entry 34): the README starts with a 3-command quick start, and the code map and known debt match the code. **Budget:** 3 minutes.
 
 > Write the root README.md with how to run the backend, the frontend, and the tests in 3 commands or fewer. Then update the code map so it matches what really exists, and record in known debt what was left pending.
 
@@ -139,7 +146,14 @@ Prompts prepared before development, in the user's own numbering. They are recor
 
 ### 12. Verification
 
-**Status:** pending. **Budget:** 4 minutes. Part of the manual check was done in prompt log entry 30 and with Docker; the full matrix of 8 combinations with candle counts is still pending.
+**Status:** done (prompt log entry 34). Typecheck and lint passed with no output, and 168 of 168 tests passed. Candles per combination, from `curl` against the running backend:
+
+| Symbol | 1m | 5m | 15m | 1h |
+| --- | --- | --- | --- | --- |
+| MES | 388 | 78 | 26 | 7 |
+| NQ | 384 | 78 | 26 | 7 |
+
+1m matches the unique rows (MES 390 rows with 2 duplicates, NQ 385 with 1), and the session runs 13:30–19:59 UTC. `ES`, `2h`, a missing `tf`, and a repeated `tf` all returned `400` with their codes. **Budget:** 4 minutes.
 
 > Run typecheck, lint, and all the backend tests and show me the real output. Then test the endpoint by hand with curl for MES and NQ in the four timeframes and with a couple of invalid inputs, and tell me how many candles each combination returns. Do not fix anything without asking me first.
 
@@ -494,3 +508,11 @@ Chronological record of the prompts sent during development. Most prompts were w
 **Date:** 2026-10-24
 
 > I also want you to create a Docker image for both the backend and the frontend, and a docker compose, so the app depends only on this to run.
+
+### 34. Run the pending prompts
+
+**Date:** 2026-10-24
+
+> Do them, I approve everything.
+>
+> (Answer to: start with planned prompts 6, 7, 12, 8, and 9, and approve installing `lightweight-charts` 5.2.1? See "Planned prompts" for each one and its result.)
