@@ -44,6 +44,7 @@ Technical assessment. Two independent npm projects:
 | `backend/src/infrastructure/fixtures/` | Small JSON files for loader tests: valid, broken JSON, not an array, invalid row. Excluded from Prettier | exists |
 | `backend/src/presentation/http/app.ts` | `createApp({ getCandles })`: builds the Express app without listening. Routes `GET /health` and `GET /candles`, then the 404 handler and the error handler | exists |
 | `backend/src/presentation/http/app.test.ts` | HTTP tests for `createApp()` with `supertest`: fake use cases, plus one test against the real dataset | exists |
+| `backend/src/presentation/http/candles.integration.test.ts` | Integration tests: `createApp` + real `getCandles` + a fake repository with known data (unsorted, a duplicate, a gap), plus the real dataset for every symbol and timeframe | exists |
 | `backend/src/presentation/http/api-candle.ts` | `ApiCandle` (`t`, `o`, `h`, `l`, `c`, `v`), `toApiCandle()` (the only place that maps domain names to short keys), `CandlesResponse` and `toCandlesResponse()` | exists |
 | `backend/src/presentation/http/api-error.ts` | `QueryErrorCode`, `ApiErrorCode` (adds `NOT_FOUND`, `INTERNAL_ERROR`), `ApiError`, `ErrorResponse` (`{ error: { code, message } }`), `toErrorResponse()` | exists |
 | `backend/src/presentation/http/candles-query.ts` | `parseCandlesQuery(req.query)`: returns typed `{ symbol, tf }` or an `ApiError` with a stable code and a message that lists the accepted values | exists |
@@ -144,6 +145,8 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 | `/candles` endpoint | Over real HTTP: `200` with the exact JSON string and `application/json`; the use case gets `symbol` and `tf`; `200` with `candles: []`; `400` for each query code without calling the use case; the real dataset comes back sorted with ISO `t` | exists |
 | Unknown routes | `404` with `{ error: { code: "NOT_FOUND", ... } }` | exists |
 | Unexpected errors | A throwing use case gives `500` with the exact generic body, no internal detail, and a server log entry | exists |
+| Integration, fake repository | Exact JSON for known data through the real use case; ascending, unique `t` from unsorted rows; every query code with status `400` and exact message; repeated `symbol` and `tf`; `404 NOT_FOUND`; a throwing repository gives the exact generic `500` with no detail | exists |
+| Integration, real dataset | For all 8 symbol and timeframe pairs: `200`, at least one candle, keys exactly `t,o,h,l,c,v`, ISO `t`, and finite `o,h,l,c,v` (no `NaN`, `null`, or `undefined`) | exists |
 
 ## Commands
 

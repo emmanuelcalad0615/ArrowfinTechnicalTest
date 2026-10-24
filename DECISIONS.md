@@ -60,6 +60,7 @@ Design decisions and trade-offs for this technical assessment, followed by the l
 - **`express.json()` was removed.** The API only has `GET` routes, and a malformed request body would otherwise have reached the error handler as a `500`.
 - **`main.ts` loads the repository before `listen`.** A missing or invalid data file prints the `CandleFileLoadError` message and exits with code 1, so the server never starts with bad data. Checked by moving the dataset away and running `node src/main.ts`.
 - **`QueryErrorCode` is the subset of `ApiErrorCode` that query validation can return.** Its message table only needs those four codes, while `NOT_FOUND` and `INTERNAL_ERROR` stay in the error handlers.
+- **Two levels of HTTP tests.** `app.test.ts` fakes the use case to test the controller and the error handlers on their own. `candles.integration.test.ts` runs the real use case and domain behind `createApp`, with a fake repository of known data, and checks every symbol and timeframe of the real dataset for `NaN`, `null`, and `undefined`. `JSON.stringify` turns `NaN` and `Infinity` into `null`, so checking the HTTP response for finite numbers also catches a `NaN` produced inside the domain.
 
 ## Prompt log
 
@@ -390,3 +391,11 @@ Chronological record of the prompts sent during development. Most prompts were w
 > Now the GET /candles controller. It must be thin: it only validates the query, calls the use case, and maps the result to { symbol, tf, candles: [{ t, o, h, l, c, v }] }, with t in ISO 8601 UTC. A validation error responds 400.
 >
 > Split app creation into a function createApp(dependencies) that does not call listen, so it can be tested with supertest without starting the server. Add an error middleware at the end that responds 500 with a generic { error: { code: "INTERNAL_ERROR", message } }, with no stack traces or internal details, and a handler for routes that do not exist that responds 404 with the same error format.
+
+### 31. Integration tests
+
+**Date:** 2026-10-24
+
+> Now integration tests with supertest against createApp, using a fake repository with known data. I want to cover the happy path with the exact shape of the response, the ascending order of the candles, each validation error with its status and its code, a repeated parameter, a route that does not exist that gives 404, and an unexpected repository error that gives 500 without leaking details.
+>
+> Also add a test against the real dataset that checks that no candle of any symbol and timeframe has NaN, null, or undefined in its fields.
