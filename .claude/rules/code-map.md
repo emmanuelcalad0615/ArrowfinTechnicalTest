@@ -35,7 +35,7 @@ Technical assessment. Two independent npm projects:
 | `backend/src/domain/normalize-candles.ts` | `normalizeCandles()`: pure function. Removes duplicates by symbol + `ts` (first appearance wins) and sorts by `ts` ascending. Never modifies its input | exists |
 | `backend/src/domain/timeframe.ts` | `TIMEFRAMES`, `Timeframe`, `isTimeframe()`, `TIMEFRAME_MS`, `MS_PER_MINUTE`, `bucketStart()` (start of the interval that contains a `ts`, UTC-aligned) | exists |
 | `backend/src/domain/timestamp.ts` | `formatTimestamp()` (epoch ms to `2026-08-25T14:00:00Z`) and `parseMinuteTimestamp()` (strict ISO 8601 UTC minute to epoch ms, or `null`) | exists |
-| `backend/src/domain/aggregate-candles.ts` | `aggregateCandles()`: pure function. Normalizes with `normalizeCandles()`, then aggregates 1-minute candles into `tf` intervals with `bucketStart()` | exists |
+| `backend/src/domain/aggregate-candles.ts` | `aggregate()`: pure function. Normalizes with `normalizeCandles()`, then aggregates 1-minute candles into `tf` intervals with `bucketStart()` | exists |
 | `backend/src/domain/` | Query validation, `CandleRepository` interface | planned |
 | `backend/src/application/` | Get-candles use case | planned |
 | `backend/src/infrastructure/candle-file.ts` | JSON loader: `readCandleFile()` reads the data file, `parseCandleFile()` validates every row with type guards. Returns a typed result, never throws | exists |
@@ -94,9 +94,9 @@ Errors return `{ "error": { "code": "...", "message": "..." } }`:
 
 | Quirk | Handling | Where |
 | --- | --- | --- |
-| Rows arrive unsorted | Sort by `ts`, then symbol, before aggregating. Output is sorted the same way | `normalizeCandles()`, `aggregateCandles()` |
+| Rows arrive unsorted | Sort by `ts`, then symbol, before aggregating. Output is sorted the same way | `normalizeCandles()`, `aggregate()` |
 | Duplicate rows | The same candle sent again (per `README.md`). Keep the first per symbol and `ts` | `normalizeCandles()` |
-| Missing minutes | Aggregate only the minutes that exist. Never invent candles. Omit empty intervals | `aggregateCandles()` |
+| Missing minutes | Aggregate only the minutes that exist. Never invent candles. Omit empty intervals | `aggregate()` |
 
 Intervals start at `ts` floored to the timeframe, aligned to the UTC clock (14:07 goes to the 5m interval at 14:05). Candles of different symbols are never merged.
 
@@ -110,11 +110,13 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 | Aggregation math | open of first, close of last, highest high, lowest low, summed volume (assessment example) | exists |
 | Duplicates | Duplicate rows do not change the result | exists |
 | Unsorted input | Result does not depend on input order; output is oldest to newest | exists |
-| Input untouched | `aggregateCandles()` does not modify its input | exists |
+| Input untouched | `aggregate()` does not modify its input | exists |
 | Missing minutes | Gaps never produce invented candles; empty intervals are omitted | exists |
-| Interval alignment | `bucketStart()` floors `ts` to the UTC clock; an exact boundary belongs to its own interval. `aggregateCandles()` uses it | exists |
+| Interval alignment | `bucketStart()` floors `ts` to the UTC clock; an exact boundary belongs to its own interval. `aggregate()` uses it | exists |
 | Symbols kept apart | Candles of different symbols are never merged | exists |
 | Normalization | `normalizeCandles()` removes exact duplicates, keeps the first appearance, sorts by `ts`, leaves its input untouched, and handles an empty input | exists |
+| Same result for duplicates and order | `aggregate()` gives exactly the same output with duplicated rows and for every order of the same rows | exists |
+| 1m and empty input | `aggregate()` in 1m returns the deduplicated, sorted input; an empty input returns `[]` in every timeframe | exists |
 | Instrument guard | `isInstrument()` accepts only `MES` and `NQ`, case-sensitive; rejects `undefined`, `null`, numbers, and arrays | exists |
 | Timeframe guard | `isTimeframe()` accepts only `1m`, `5m`, `15m`, `1h`, case-sensitive; rejects `undefined`, `null`, numbers, and arrays | exists |
 | `t` format | `formatTimestamp()` returns exactly `YYYY-MM-DDTHH:MM:SSZ`, no milliseconds | exists |

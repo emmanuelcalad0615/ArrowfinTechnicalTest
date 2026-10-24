@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateCandles } from './aggregate-candles.ts'
+import { aggregate } from './aggregate-candles.ts'
 import type { Candle, Instrument } from './candle.ts'
-import type { Timeframe } from './timeframe.ts'
+import { TIMEFRAMES, type Timeframe } from './timeframe.ts'
 
 type Prices = Pick<Candle, 'open' | 'high' | 'low' | 'close' | 'volume'>
 
@@ -47,9 +47,9 @@ const firstThreeAggregated = candle('14:05', {
   volume: 60,
 })
 
-describe('aggregateCandles', () => {
+describe('aggregate', () => {
   it('takes open of the first, close of the last, highest high, lowest low, and summed volume', () => {
-    expect(aggregateCandles([first, second, third], '5m')).toEqual([
+    expect(aggregate([first, second, third], '5m')).toEqual([
       firstThreeAggregated,
     ])
   })
@@ -57,10 +57,51 @@ describe('aggregateCandles', () => {
   it('ignores duplicate rows with the same symbol and ts', () => {
     const withDuplicates = [first, second, { ...second }, third, { ...first }]
 
-    expect(aggregateCandles(withDuplicates, '5m')).toEqual([
-      firstThreeAggregated,
-    ])
+    expect(aggregate(withDuplicates, '5m')).toEqual([firstThreeAggregated])
   })
+
+  it('gives exactly the same result when rows are duplicated', () => {
+    const withDuplicates = [
+      first,
+      { ...first },
+      second,
+      third,
+      { ...third },
+      { ...second },
+    ]
+
+    expect(aggregate(withDuplicates, '5m')).toEqual(
+      aggregate([first, second, third], '5m'),
+    )
+  })
+
+  it.each([
+    { order: 'first, third, second', rows: [first, third, second] },
+    { order: 'second, first, third', rows: [second, first, third] },
+    { order: 'second, third, first', rows: [second, third, first] },
+    { order: 'third, first, second', rows: [third, first, second] },
+    { order: 'third, second, first', rows: [third, second, first] },
+  ])(
+    'gives exactly the same result for rows in the order $order',
+    ({ rows }) => {
+      expect(aggregate(rows, '5m')).toEqual(
+        aggregate([first, second, third], '5m'),
+      )
+    },
+  )
+
+  it('returns the deduplicated input sorted by ts for 1m', () => {
+    const input = [third, first, { ...second }, second, { ...first }]
+
+    expect(aggregate(input, '1m')).toEqual([first, second, third])
+  })
+
+  it.each(TIMEFRAMES)(
+    'returns an empty array for an empty input in %s',
+    (timeframe) => {
+      expect(aggregate([], timeframe)).toEqual([])
+    },
+  )
 
   it('orders unsorted input by time and returns candles from oldest to newest', () => {
     const later = candle('14:10', {
@@ -71,7 +112,7 @@ describe('aggregateCandles', () => {
       volume: 5,
     })
 
-    expect(aggregateCandles([later, third, first, second], '5m')).toEqual([
+    expect(aggregate([later, third, first, second], '5m')).toEqual([
       firstThreeAggregated,
       later,
     ])
@@ -80,7 +121,7 @@ describe('aggregateCandles', () => {
   it('does not modify its input', () => {
     const input = [third, first, second]
 
-    aggregateCandles(input, '5m')
+    aggregate(input, '5m')
 
     expect(input).toEqual([third, first, second])
   })
@@ -101,9 +142,7 @@ describe('aggregateCandles', () => {
       volume: 8,
     })
 
-    expect(
-      aggregateCandles([first, afterGap, afterEmptyIntervals], '5m'),
-    ).toEqual([
+    expect(aggregate([first, afterGap, afterEmptyIntervals], '5m')).toEqual([
       candle('14:05', {
         open: 100,
         high: 103,
@@ -125,7 +164,7 @@ describe('aggregateCandles', () => {
   ])(
     'puts a $time candle in the $timeframe interval that starts at $expectedStart UTC',
     ({ timeframe, time, expectedStart }) => {
-      const [aggregated] = aggregateCandles(
+      const [aggregated] = aggregate(
         [candle(time, { open: 1, high: 1, low: 1, close: 1, volume: 1 })],
         timeframe,
       )
@@ -141,7 +180,7 @@ describe('aggregateCandles', () => {
       'NQ',
     )
 
-    expect(aggregateCandles([first, nq], '5m')).toEqual([
+    expect(aggregate([first, nq], '5m')).toEqual([
       first,
       { ...nq, ts: at('14:05') },
     ])

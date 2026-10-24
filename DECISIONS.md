@@ -17,9 +17,10 @@ Design decisions and trade-offs for this technical assessment, followed by the l
 
 - **`ts` is epoch milliseconds in the domain.** The data file has ISO 8601 strings. The JSON loader will parse them once at the edge, so the domain does integer math and never parses dates or risks `NaN`. The API format for time is decided in the presentation layer.
 - **Intervals come from flooring `ts` to the timeframe duration, in `bucketStart()`.** Epoch time starts at a UTC midnight, so this aligns 5m, 15m, and 1h intervals to the UTC clock with no date library and no dependence on the system time zone. The full test suite passes under `TZ=UTC`, `America/Bogota`, `Asia/Kolkata` (UTC+5:30), and `Pacific/Chatham` (UTC+12:45).
-- **Duplicates keep the first row per symbol and `ts`, in `normalizeCandles()`.** The dataset README says a duplicate is the same candle sent again, so any copy gives the same result. `normalizeCandles()` returns the canonical 1-minute series (unique and sorted) as one step, built from two private single-purpose helpers, and `aggregateCandles()` starts from it.
-- **Candles are grouped by symbol and interval.** `aggregateCandles()` stays correct even if it receives both symbols at once. Output is sorted by `ts`, then symbol.
+- **Duplicates keep the first row per symbol and `ts`, in `normalizeCandles()`.** The dataset README says a duplicate is the same candle sent again, so any copy gives the same result. `normalizeCandles()` returns the canonical 1-minute series (unique and sorted) as one step, built from two private single-purpose helpers, and `aggregate()` starts from it.
+- **Candles are grouped by symbol and interval.** `aggregate()` stays correct even if it receives both symbols at once. Output is sorted by `ts`, then symbol.
 - **Missing minutes are not filled.** An interval is built only from the minutes that exist, and an interval with no rows does not appear. This matches the data: a missing minute means nothing traded.
+- **`aggregate()` merges each candle into its interval as it goes, instead of grouping into arrays and reading the first and last element.** Every interval starts as a copy of a real candle, and each later candle updates high, low, close, and volume. There is no indexed access, so `noUncheckedIndexedAccess` never produces `Candle | undefined`, and no `!` or `as` is needed. Values come only from validated finite numbers through `Math.max`, `Math.min`, and addition, so the result can never hold `NaN` or `undefined`.
 
 ### Timestamps (2026-10-24)
 
@@ -305,3 +306,19 @@ Chronological record of the prompts sent during development. Most prompts were w
 > Now a pure function that receives 1-minute candles, removes duplicates by the key symbol + ts, and returns them sorted by ts ascending. A duplicate is the same candle sent again, so the first appearance is kept. It must not mutate the input array.
 >
 > Tests first. One with exact duplicates, one with unsorted data, one that checks the original array did not change, and one with an empty array.
+
+### 25. aggregate
+
+**Date:** 2026-10-24
+
+> Now the function aggregate(candles, timeframe), which uses the two previous ones. It groups by bucketStart and for each group computes open of the first candle, close of the last, highest high, lowest low, and summed volume. Intervals with no candles do not appear and no candles are invented for missing minutes. The result is sorted ascending.
+>
+> With noUncheckedIndexedAccess, accessing the first or last candle of the group gives Candle | undefined. Handle it properly, without "!" or "as", so that NaN or undefined can never come out.
+>
+> Tests first.
+> - The assessment example, (o 100, h 101, l 99.5, c 100.5, v 20) + (o 100.5, h 102, l 100, c 101, v 10) + (o 101, h 101.5, l 98, c 99, v 30) gives o 100, h 102, l 98, c 99, v 60.
+> - The same data with duplicate rows gives exactly the same result.
+> - The same data unsorted gives exactly the same result.
+> - An interval with missing minutes is aggregated with the ones that exist.
+> - In 1m the result equals the deduplicated and sorted input.
+> - An empty array returns an empty array.

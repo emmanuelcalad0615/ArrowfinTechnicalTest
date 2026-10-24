@@ -2,7 +2,7 @@ import { byTimeThenSymbol, candleKey, type Candle } from './candle.ts'
 import { normalizeCandles } from './normalize-candles.ts'
 import { bucketStart, type Timeframe } from './timeframe.ts'
 
-export function aggregateCandles(
+export function aggregate(
   candles: readonly Candle[],
   timeframe: Timeframe,
 ): Candle[] {
