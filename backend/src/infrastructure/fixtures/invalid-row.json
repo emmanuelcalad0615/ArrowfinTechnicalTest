@@ -1,0 +1,4 @@
+[
+  { "symbol": "MES", "ts": "2026-08-25T14:05:00Z", "open": 100, "high": 101, "low": 99.5, "close": 100.5, "volume": 20 },
+  { "symbol": "MES", "ts": "2026-08-25T14:06:00Z", "open": 100.5, "high": 102, "low": 100, "close": 101, "volume": -5 }
+]

@@ -24,8 +24,8 @@ Technical assessment. Two independent npm projects:
 | --- | --- | --- |
 | `CLAUDE.md` | Agent instructions: non-negotiable rules, workflow, commands | exists |
 | `README.md` | Project README: setup, run, checks, API status, dataset description | exists |
-| `candles_1m.json` | Input data: 1-minute candles for `MES` and `NQ`, one session on 2026-08-25 | exists |
-| `instruments.json` | The 2 contracts: `MES` and `NQ`, with `tick_size` | exists |
+| `dataset/candles_1m.json` | Input data: 1-minute candles for `MES` and `NQ`, one session on 2026-08-25 | exists |
+| `dataset/instruments.json` | The 2 contracts: `MES` and `NQ`, with `tick_size` | exists |
 | `DECISIONS.md` | Design decisions, trade-offs, and the prompt log | exists |
 | `.claude/rules/` | Project rules, including this map | exists |
 | `.claude/agents/` | Auditor agents, one per rule file. See `audits.md` | exists |
@@ -37,10 +37,12 @@ Technical assessment. Two independent npm projects:
 | `backend/src/domain/timeframe.ts` | `TIMEFRAMES`, `Timeframe`, `isTimeframe()`, `TIMEFRAME_MS`, `MS_PER_MINUTE`, `bucketStart()` (start of the interval that contains a `ts`, UTC-aligned) | exists |
 | `backend/src/domain/timestamp.ts` | `formatTimestamp()` (epoch ms to `2026-08-25T14:00:00Z`) and `parseMinuteTimestamp()` (strict ISO 8601 UTC minute to epoch ms, or `null`) | exists |
 | `backend/src/domain/aggregate-candles.ts` | `aggregate()`: pure function. Normalizes with `normalizeCandles()`, then aggregates 1-minute candles into `tf` intervals with `bucketStart()` | exists |
-| `backend/src/domain/` | Query validation, `CandleRepository` interface | planned |
-| `backend/src/application/` | Get-candles use case | planned |
+| `backend/src/domain/candle-repository.ts` | `CandleRepository` interface: `findBySymbol(symbol)` returns the stored 1-minute candles of one symbol | exists |
+| `backend/src/domain/` | Query validation | planned |
+| `backend/src/application/get-candles.ts` | `createGetCandles(repository)` returns the `GetCandles` use case: `(symbol, timeframe)` to aggregated candles. Repository injected; knows nothing of HTTP | exists |
 | `backend/src/infrastructure/candle-file.ts` | JSON loader: `readCandleFile()` reads the data file, `parseCandleFile()` checks it is a JSON array and validates every row with `parseCandle()`. Returns a typed result, never throws | exists |
-| `backend/src/infrastructure/` | In-memory `CandleRepository` implementation, loaded once at startup | planned |
+| `backend/src/infrastructure/in-memory-candle-repository.ts` | `DATASET_FILE` (fixed path, resolved from the module, not the cwd), `loadCandleRepository()` (reads and validates once, groups by symbol, throws `CandleFileLoadError` naming the problem and row), `createInMemoryCandleRepository()` | exists |
+| `backend/src/infrastructure/fixtures/` | Small JSON files for loader tests: valid, broken JSON, not an array, invalid row. Excluded from Prettier | exists |
 | `backend/src/presentation/http/app.ts` | `createApp()`: Express app and routes. Has `GET /health` | exists |
 | `backend/src/presentation/http/app.test.ts` | HTTP tests for `createApp()` with `supertest` | exists |
 | `backend/src/presentation/http/api-candle.ts` | `ApiCandle` response type (`t`, `o`, `h`, `l`, `c`, `v`) and `toApiCandle()`, the only place that maps domain names to short keys | exists |
@@ -125,7 +127,9 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 | Strict `ts` parsing | `parseMinuteTimestamp()` rejects non-ISO formats, offsets, milliseconds, seconds other than 0, and impossible dates | exists |
 | Row validation | `parseCandle()` accepts a valid row and `high` equal to `low`; rejects non-objects, a bad symbol, a bad `ts`, a non-finite open, high, low, or close, a volume that is not a non-negative integer, and `high` below `low`, each with its own code | exists |
 | Loader validation | `parseCandleFile()` rejects invalid JSON and non-arrays, and reports the index and `parseCandle()` code of the first invalid row | exists |
-| Real dataset | `readCandleFile()` loads all 775 rows of `candles_1m.json` | exists |
+| Real dataset | `readCandleFile()` and `loadCandleRepository(DATASET_FILE)` load all 775 rows of `dataset/candles_1m.json` | exists |
+| Repository loading | Loads a valid fixture grouped by symbol; keeps serving after the file is deleted (read once); throws `CandleFileLoadError` with a clear message for a missing file, broken JSON, a non-array, and an invalid row (index and code); empty list for a symbol with no candles | exists |
+| Get candles use case | With a fake repository: returns only the requested symbol, and aggregates into the requested timeframe | exists |
 | Invalid input | Each bad `symbol` / `tf` returns `400` with its error code | planned |
 | `/candles` endpoint | Response shape, status codes, and candle order over real HTTP | planned |
 
@@ -140,5 +144,5 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 
 - Backend has no custom error handler.
 - Frontend is still the Vite template.
-- Not decided: whether the data files stay in the root or move into `backend/`.
+- `main.ts` does not load the repository yet. It will, together with the `/candles` endpoint, so a bad data file stops the server at startup.
 - Not decided: how the frontend gets the response types without duplicating them.

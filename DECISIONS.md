@@ -30,6 +30,14 @@ Design decisions and trade-offs for this technical assessment, followed by the l
 - **The parsed `ts` must also survive a round trip.** `Date.parse` rolls impossible dates over (`2026-02-30` becomes `2026-03-02`, and `24:00` becomes the next day), and the regex does not catch them. Formatting the parsed value back must give the original text. This check alone also rejects every format the regex rejects; the regex stays as an explicit first filter.
 - **Timestamp parsing and formatting live in the domain.** Both the loader (infrastructure) and the response (presentation) need them, and outer layers may only depend inward.
 
+### Data access (2026-10-24)
+
+- **The dataset lives in `dataset/` at the repo root.** `DATASET_FILE` is a fixed constant resolved with `import.meta.url`, so the path does not depend on the directory the server is started from. No request value can reach it.
+- **`CandleRepository` is a domain interface with one method, `findBySymbol(symbol)`.** It is synchronous because the data is in memory. The in-memory implementation groups candles by symbol at load time and returns them as stored; `aggregate()` deduplicates and sorts.
+- **Loading throws `CandleFileLoadError`; everything below it returns typed results.** `readCandleFile()` and `parseCandle()` never throw. `loadCandleRepository()` turns their error into one message that says what failed, the file, and for an invalid row its index and rule. Throwing here makes a bad file stop the server at startup instead of failing a request. `main.ts` will catch it, log it, and exit with code 1, so it is never an unhandled exception.
+- **Loader tests use small fixture files in `backend/src/infrastructure/fixtures/`**, plus one test against the real dataset. The fixtures are excluded from Prettier because one is deliberately broken JSON.
+- **`getCandles` is a function built by `createGetCandles(repository)`.** The repository is injected once at startup, and the controller only receives the resulting `(symbol, timeframe)` function, so it never sees the repository. A factory function is enough; there is no state that would need a class.
+
 ### Response shape (2026-10-24)
 
 - **Response candles use short keys: `t`, `o`, `h`, `l`, `c`, `v`**, the same as the assessment example. The domain `Candle` keeps `ts`, `open`, `high`, `low`, `close`, and `volume`, so domain code stays readable.
@@ -333,3 +341,21 @@ Chronological record of the prompts sent during development. Most prompts were w
 > Tests first, with one valid row and one invalid row for each rule.
 >
 > (Follow-up answer: update the 3 loader tests that expected `INVALID_NUMBER` to the field-specific codes.)
+
+### 27. Candle repository
+
+**Date:** 2026-10-24
+
+> Now data access. In the domain or application layer, define a CandleRepository interface with a method that returns the candles of a symbol. In infrastructure, write the implementation that reads dataset/candles_1m.json only once, validates each row with parseCandle, and keeps the candles in memory already grouped by symbol.
+>
+> If the file does not exist, is not valid JSON, is not an array, or some row is invalid, loading throws a clear error that says what happened and in which row. The idea is that the server fails at startup and not in the middle of a request. The file path is fixed on the server and is resolved relative to the project, not to the directory the command is run from.
+>
+> Tests with small fixture files: one valid, one that does not exist, one with broken JSON, and one with an invalid row.
+
+### 28. getCandles use case
+
+**Date:** 2026-10-24
+
+> Now the getCandles use case in the application layer. It receives the repository by injection in the constructor or as a parameter, and given an Instrument and a Timeframe it returns the aggregated candles. It knows nothing about HTTP.
+>
+> Tests first with a fake in-memory repository, without touching the real file. One that checks it only returns candles of the requested symbol and another that checks it applies the right timeframe.
