@@ -62,6 +62,87 @@ Design decisions and trade-offs for this technical assessment, followed by the l
 - **`QueryErrorCode` is the subset of `ApiErrorCode` that query validation can return.** Its message table only needs those four codes, while `NOT_FOUND` and `INTERNAL_ERROR` stay in the error handlers.
 - **Two levels of HTTP tests.** `app.test.ts` fakes the use case to test the controller and the error handlers on their own. `candles.integration.test.ts` runs the real use case and domain behind `createApp`, with a fake repository of known data, and checks every symbol and timeframe of the real dataset for `NaN`, `null`, and `undefined`. `JSON.stringify` turns `NaN` and `Infinity` into `null`, so checking the HTTP response for finite numbers also catches a `NaN` produced inside the domain.
 
+### Docker (2026-10-24)
+
+- **The app runs with Docker only: `docker compose up --build`.** No Node or npm is needed on the host. The app is on port 8080 and the API on port 3000.
+- **Backend image: `node:26-alpine` with production dependencies only.** Node runs the `.ts` sources directly, so there is no build stage. It runs as the `node` user and has a healthcheck on `/health`. Node 26 matches the version used for development and tests.
+- **The build context is the repo root.** The backend image copies `dataset/` next to `backend/`, so `DATASET_FILE` resolves the same way as in development, and the data stays outside `backend/`. One `.dockerignore` keeps `node_modules`, `dist`, `.env`, `.git`, and `.claude` out of the context.
+- **Frontend image: Vite build, then `nginx:1.29-alpine` serving `dist`.** nginx forwards `/candles` to `backend:3000`, the same job the Vite proxy does in development, so the browser stays same-origin and the backend still needs no CORS.
+- **The frontend container starts only after the backend is healthy.** A bad data file stops the backend at startup, so the frontend never starts in front of a broken API.
+- Checked: both images build, `GET /` returns `200`, `/candles` through nginx returns the aggregated JSON, a repeated `tf` returns `400`, and the backend process runs as `node`.
+
+## Time budget
+
+The assessment has a 3-hour limit. Times are approximate, taken from file and commit times. They assume the clock started with the first prompt at about 09:08, so the limit is about 12:08. Done phases show the time actually used; pending phases show the planned budget.
+
+| Phase | Prompts | Time | Minutes | Status |
+| --- | --- | --- | --- | --- |
+| Setup: folders, rules, auditor agents, `CLAUDE.md` | log 1–13 | 09:08–10:21 | ≈ 73 | done |
+| Tooling: ESLint, Prettier, Vitest, strict TypeScript, Vite proxy, README | log 14–16, planned 5 | 10:21–10:35 | ≈ 14 | done |
+| Domain: aggregation, timestamps, types, guards, `bucketStart`, normalization | log 17–25 | 10:35–11:07 | ≈ 32 | done |
+| Data access and API: `parseCandle`, repository, use case, query validation, controller, entry point, integration tests | log 26–31, planned 3 and 11 | 11:07–11:28 | ≈ 21 | done |
+| Planning and Docker | log 32–33 | 11:28–11:36 | ≈ 8 | done |
+| Frontend data layer | planned 6 | 11:36–11:44 | 8 | pending |
+| Interface and chart | planned 7 | 11:44–11:56 | 12 | pending |
+| Verification | planned 12 | 11:56–12:00 | 4 | pending |
+| Final review | planned 8 | 12:00–12:03 | 3 | pending |
+| README and map | planned 9 | 12:03–12:06 | 3 | pending |
+| Buffer | | 12:06–12:08 | 2 | |
+
+Setup took about 40% of the time. The remaining budget favors the interface, the only pending part with visible output, and keeps verification and review short because most behavior already has tests.
+
+## Planned prompts
+
+Prompts prepared before development, in the user's own numbering. They are recorded separately from the prompt log, which only holds prompts already sent. Recommended order for the pending ones: 6, 7, 12, 8, 9 (verification comes before the review, and the README and map come last so they describe the final state).
+
+### 3. Data loading
+
+**Status:** done, covered by prompt log entries 19, 26, and 27, with stricter rules (strict `ts`, integer volume, `high` at least `low`).
+
+> Now the JSON loader. The candles_1m.json file is in dataset/ at the repo root and is loaded only once when the server starts. Validate each row as it is loaded (it must have symbol, ts, and finite numbers in open, high, low, close, and volume). If the file does not exist or is broken, the server must fail at startup with a clear message, not crash later in the middle of a request. Add tests for that.
+
+### 5. Frontend connection
+
+**Status:** done, covered by prompt log entry 15 (Vite dev proxy) and the nginx proxy in the frontend image. No reason was found to use CORS: nothing is deployed, and both proxies keep the browser same-origin.
+
+> Configure the backend so the frontend can call it. I prefer the Vite proxy to the backend instead of opening CORS, so the frontend calls /candles directly. If you see a reason to do it with CORS, tell me before changing it.
+
+### 6. Frontend data layer
+
+**Status:** pending. **Budget:** 8 minutes. Data from `response.json()` must be narrowed with type guards (`code-quality.md`). Open decision: how the frontend gets the response types without duplicating them by hand.
+
+> In the frontend, create a module for the API that calls GET /candles and types the response, and a hook useCandles(symbol, tf) that returns the loading, error, and data states. If the user changes the selector quickly, an old response must not overwrite the new one, so cancel the previous request with AbortController. If the response is a backend error, show the message that comes in the JSON.
+
+### 7. Interface and chart
+
+**Status:** pending. **Budget:** 12 minutes. Needs the `lightweight-charts` dependency (latest is 5.2.1, where series are added with `chart.addSeries(CandlestickSeries)`), which requires the user's approval first.
+
+> Now the interface. A select for the symbol (MES and NQ) and another for the timeframe (1m, 5m, 15m, 1h), both native and with their label. Below them, a candlestick chart with lightweight-charts; check the installed version, because the API changed between versions. The chart adapts to the width of its container and is cleaned up when the component unmounts. While loading it shows a loading message, if there is an error it shows the message with a retry button, and if there are no candles it says so. Make clear that the times are in UTC. Simple styles, no UI libraries.
+
+### 8. Final review
+
+**Status:** pending. **Budget:** 3 minutes. Can use the auditor agents, which the user may launch on request.
+
+> Review everything we did looking for bugs and cases we missed, especially in the aggregation, the validation, and the state handling in the frontend. Do not fix anything yet; just give me a list ordered by importance.
+
+### 9. README and map
+
+**Status:** pending. **Budget:** 3 minutes. The README already has setup, run, and Docker instructions; this pass reduces them to 3 commands or fewer and syncs the code map and known debt with the final code.
+
+> Write the root README.md with how to run the backend, the frontend, and the tests in 3 commands or fewer. Then update the code map so it matches what really exists, and record in known debt what was left pending.
+
+### 11. Entry point
+
+**Status:** done, covered by prompt log entry 30. `PORT` defaults to 3000 and must be an integer from 1 to 65535; a failed data load logs the error and exits with code 1.
+
+> Now main.ts as the composition root. It creates the repository, loads the data, builds the use case, creates the app, and calls listen. The port comes from PORT with 3000 as the default, validated as an integer. If loading the data fails, it logs the error with console.error and ends the process with a non-zero code.
+
+### 12. Verification
+
+**Status:** pending. **Budget:** 4 minutes. Part of the manual check was done in prompt log entry 30 and with Docker; the full matrix of 8 combinations with candle counts is still pending.
+
+> Run typecheck, lint, and all the backend tests and show me the real output. Then test the endpoint by hand with curl for MES and NQ in the four timeframes and with a couple of invalid inputs, and tell me how many candles each combination returns. Do not fix anything without asking me first.
+
 ## Prompt log
 
 Chronological record of the prompts sent during development. Most prompts were written in Spanish; those entries are English translations.
@@ -399,3 +480,17 @@ Chronological record of the prompts sent during development. Most prompts were w
 > Now integration tests with supertest against createApp, using a fake repository with known data. I want to cover the happy path with the exact shape of the response, the ascending order of the candles, each validation error with its status and its code, a repeated parameter, a route that does not exist that gives 404, and an unexpected repository error that gives 500 without leaking details.
 >
 > Also add a test against the real dataset that checks that no candle of any symbol and timeframe has NaN, null, or undefined in its fields.
+
+### 32. Plan the pending prompts
+
+**Date:** 2026-10-24
+
+> These are the pending prompts. Document them separately in DECISIONS, distribute the time so the hours are well distributed, and give me all the commit commands at the end.
+>
+> (The pending prompts are in the "Planned prompts" section, and the time plan is in "Time budget".)
+
+### 33. Docker
+
+**Date:** 2026-10-24
+
+> I also want you to create a Docker image for both the backend and the frontend, and a docker compose, so the app depends only on this to run.
