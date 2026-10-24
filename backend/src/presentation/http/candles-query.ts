@@ -4,7 +4,7 @@ import {
   TIMEFRAMES,
   type Timeframe,
 } from '../../domain/timeframe.ts'
-import type { ApiError, ApiErrorCode } from './api-error.ts'
+import type { ApiError, QueryErrorCode } from './api-error.ts'
 
 export interface CandlesQuery {
   readonly symbol: Instrument
@@ -18,7 +18,7 @@ export type CandlesQueryResult =
 const SYMBOL_VALUES = SYMBOLS.join(', ')
 const TIMEFRAME_VALUES = TIMEFRAMES.join(', ')
 
-const MESSAGES: Readonly<Record<ApiErrorCode, string>> = {
+const MESSAGES: Readonly<Record<QueryErrorCode, string>> = {
   MISSING_SYMBOL: `Query parameter "symbol" is required. Accepted values: ${SYMBOL_VALUES}.`,
   INVALID_SYMBOL: `Query parameter "symbol" must be exactly one of: ${SYMBOL_VALUES}.`,
   MISSING_TIMEFRAME: `Query parameter "tf" is required. Accepted values: ${TIMEFRAME_VALUES}.`,
@@ -46,6 +46,6 @@ function isAbsent(value: unknown): boolean {
   return value === undefined || value === ''
 }
 
-function failure(code: ApiErrorCode): CandlesQueryResult {
+function failure(code: QueryErrorCode): CandlesQueryResult {
   return { ok: false, error: { code, message: MESSAGES[code] } }
 }

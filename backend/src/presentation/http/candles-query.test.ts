@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { SYMBOLS } from '../../domain/candle.ts'
 import { TIMEFRAMES } from '../../domain/timeframe.ts'
-import type { ApiErrorCode } from './api-error.ts'
+import type { QueryErrorCode } from './api-error.ts'
 import { parseCandlesQuery } from './candles-query.ts'
 
-const MESSAGES: Record<ApiErrorCode, string> = {
+const MESSAGES: Record<QueryErrorCode, string> = {
   MISSING_SYMBOL:
     'Query parameter "symbol" is required. Accepted values: MES, NQ.',
   INVALID_SYMBOL: 'Query parameter "symbol" must be exactly one of: MES, NQ.',
@@ -27,7 +27,7 @@ describe('parseCandlesQuery', () => {
   it.each<{
     label: string
     query: Record<string, unknown>
-    code: ApiErrorCode
+    code: QueryErrorCode
   }>([
     { label: 'no parameters', query: {}, code: 'MISSING_SYMBOL' },
     { label: 'no symbol', query: { tf: '5m' }, code: 'MISSING_SYMBOL' },

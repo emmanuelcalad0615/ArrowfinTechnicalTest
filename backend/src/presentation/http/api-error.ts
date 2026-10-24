@@ -1,8 +1,10 @@
-export type ApiErrorCode =
+export type QueryErrorCode =
   | 'MISSING_SYMBOL'
   | 'INVALID_SYMBOL'
   | 'MISSING_TIMEFRAME'
   | 'INVALID_TIMEFRAME'
+
+export type ApiErrorCode = QueryErrorCode | 'NOT_FOUND' | 'INTERNAL_ERROR'
 
 export interface ApiError {
   readonly code: ApiErrorCode
