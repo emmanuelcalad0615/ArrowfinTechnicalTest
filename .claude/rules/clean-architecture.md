@@ -1,31 +1,31 @@
 # Clean Architecture
 
-Reglas estrictas. Aplícalas a todo el código del proyecto.
+Strict rules. Apply them to all code in the project.
 
-## Capas y dependencias
+## Layers and dependencies
 
-- Organiza el código en cuatro capas: `domain`, `application` (casos de uso), `infrastructure`, `presentation`.
-- Haz que las dependencias apunten solo hacia adentro. `domain` no depende de ninguna otra capa.
-- Escribe `domain` en TypeScript puro. No importes frameworks (Express, Nest, React) ni módulos de Node como `fs`.
+- Organize code into four layers: `domain`, `application` (use cases), `infrastructure`, `presentation`.
+- Make dependencies point inward only. `domain` depends on no other layer.
+- Write `domain` in pure TypeScript. Do not import frameworks (Express, Nest, React) or Node modules such as `fs`.
 
-## Lógica de negocio
+## Business logic
 
-- Coloca la lógica de negocio (agregación de velas, deduplicación, validación) en `domain` o `application`.
-- Nunca pongas lógica de negocio en controllers ni en componentes.
-- Limita controllers y componentes a traducir entrada y salida. Cero lógica.
+- Put business logic (candle aggregation, deduplication, validation) in `domain` or `application`.
+- Never put business logic in controllers or components.
+- Limit controllers and components to translating input and output. Zero logic.
 
-## Acceso a datos
+## Data access
 
-- Define cada repository como interfaz en `domain`.
-- Implementa cada repository en `infrastructure`.
-- Accede a datos solo a través de esas interfaces.
+- Define each repository as an interface in `domain`.
+- Implement each repository in `infrastructure`.
+- Access data only through those interfaces.
 
-## Código
+## Code
 
-- Escribe funciones puras y testeables.
-- No uses `any`.
-- Devuelve errores tipados. Nunca devuelvas `NaN` ni dejes excepciones sin manejar.
+- Write pure, testable functions.
+- Do not use `any`.
+- Return typed errors. Never return `NaN` or leave exceptions unhandled.
 
-## Simplicidad
+## Simplicity
 
-- Crea solo las abstracciones que el problema necesite. Sin sobreingeniería.
+- Create only the abstractions the problem needs. No over-engineering.
