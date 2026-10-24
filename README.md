@@ -64,8 +64,8 @@ All candles are from one trading session, **2026-08-25, 13:30 to 20:00 UTC**. Ti
 
 | File | What it holds |
 | --- | --- |
-| `instruments.json` | 2 contracts: `MES` and `NQ`. |
-| `candles_1m.json` | 1 minute candles for both contracts. |
+| `dataset/instruments.json` | 2 contracts: `MES` and `NQ`. |
+| `dataset/candles_1m.json` | 1 minute candles for both contracts. |
 
 Each candle:
 

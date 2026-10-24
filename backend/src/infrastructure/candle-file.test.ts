@@ -102,7 +102,7 @@ describe('parseCandleFile', () => {
 describe('readCandleFile', () => {
   it('loads every row of the assessment dataset', async () => {
     const result = await readCandleFile(
-      new URL('../../../candles_1m.json', import.meta.url),
+      new URL('../../../dataset/candles_1m.json', import.meta.url),
     )
 
     expect(result.ok && result.candles.length).toBe(775)
