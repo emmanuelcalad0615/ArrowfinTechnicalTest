@@ -25,6 +25,7 @@ Design decisions and trade-offs for this technical assessment, followed by the l
 ### Timestamps (2026-10-24)
 
 - **`t` in the response is ISO 8601 UTC without milliseconds**, for example `2026-08-25T14:00:00Z`, the same format as the assessment example. `toISOString()` always adds `.000`, so `formatTimestamp()` removes it. A test checks the exact string.
+- **`parseCandle()` validates one raw row in the domain and names the field that failed.** It narrows `unknown` with type guards only, and returns the first broken rule as a code: `NOT_AN_OBJECT`, `INVALID_SYMBOL`, `INVALID_TS`, `INVALID_OPEN`, `INVALID_HIGH`, `INVALID_LOW`, `INVALID_CLOSE`, `INVALID_VOLUME`, or `HIGH_BELOW_LOW`. Volume must be a non-negative integer, and `high` must be at least `low`. The loader uses it for every row. This replaced the loader generic `INVALID_NUMBER` code; the user approved updating the 3 loader tests that expected it. All 775 dataset rows pass the new rules.
 - **The loader validates `ts` strictly, not only with `Date.parse`.** `Date.parse` also accepts formats such as `2026-08-25 14:00:00` or `Tue, 25 Aug 2026 14:00:00 GMT`, and reads a `ts` without `Z` as local time. `parseMinuteTimestamp()` requires a regex match for `YYYY-MM-DDTHH:MM:SSZ`, a valid `Date.parse` result, and second 0 of a minute. Any other row fails loading with `INVALID_TS` and its index.
 - **The parsed `ts` must also survive a round trip.** `Date.parse` rolls impossible dates over (`2026-02-30` becomes `2026-03-02`, and `24:00` becomes the next day), and the regex does not catch them. Formatting the parsed value back must give the original text. This check alone also rejects every format the regex rejects; the regex stays as an explicit first filter.
 - **Timestamp parsing and formatting live in the domain.** Both the loader (infrastructure) and the response (presentation) need them, and outer layers may only depend inward.
@@ -322,3 +323,13 @@ Chronological record of the prompts sent during development. Most prompts were w
 > - An interval with missing minutes is aggregated with the ones that exist.
 > - In 1m the result equals the deduplicated and sorted input.
 > - An empty array returns an empty array.
+
+### 26. parseCandle
+
+**Date:** 2026-10-24
+
+> Now a function parseCandle(value: unknown) that turns a raw row from the JSON into a valid Candle or returns an error that says which field failed. It must validate that it is an object, that symbol is a valid Instrument, that ts is a parseable ISO 8601, that open, high, low, and close are finite numbers, that volume is a non-negative integer, and that high is greater than or equal to low. No "as", only narrowing with guards, because JSON.parse returns any.
+>
+> Tests first, with one valid row and one invalid row for each rule.
+>
+> (Follow-up answer: update the 3 loader tests that expected `INVALID_NUMBER` to the field-specific codes.)

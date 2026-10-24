@@ -33,12 +33,13 @@ Technical assessment. Two independent npm projects:
 | `backend/src/main.ts` | Composition root: reads `PORT`, wires dependencies, starts the server | exists |
 | `backend/src/domain/candle.ts` | `Candle` type (`ts` in epoch ms, UTC), `SYMBOLS`, `Instrument`, `isInstrument()`, `candleKey()` (symbol + `ts` identity), `byTimeThenSymbol()` comparator | exists |
 | `backend/src/domain/normalize-candles.ts` | `normalizeCandles()`: pure function. Removes duplicates by symbol + `ts` (first appearance wins) and sorts by `ts` ascending. Never modifies its input | exists |
+| `backend/src/domain/parse-candle.ts` | `parseCandle()`: validates one raw row with type guards and returns a `Candle` or the first broken rule as a field-specific code (`INVALID_OPEN`, `INVALID_VOLUME`, `HIGH_BELOW_LOW`, ...) | exists |
 | `backend/src/domain/timeframe.ts` | `TIMEFRAMES`, `Timeframe`, `isTimeframe()`, `TIMEFRAME_MS`, `MS_PER_MINUTE`, `bucketStart()` (start of the interval that contains a `ts`, UTC-aligned) | exists |
 | `backend/src/domain/timestamp.ts` | `formatTimestamp()` (epoch ms to `2026-08-25T14:00:00Z`) and `parseMinuteTimestamp()` (strict ISO 8601 UTC minute to epoch ms, or `null`) | exists |
 | `backend/src/domain/aggregate-candles.ts` | `aggregate()`: pure function. Normalizes with `normalizeCandles()`, then aggregates 1-minute candles into `tf` intervals with `bucketStart()` | exists |
 | `backend/src/domain/` | Query validation, `CandleRepository` interface | planned |
 | `backend/src/application/` | Get-candles use case | planned |
-| `backend/src/infrastructure/candle-file.ts` | JSON loader: `readCandleFile()` reads the data file, `parseCandleFile()` validates every row with type guards. Returns a typed result, never throws | exists |
+| `backend/src/infrastructure/candle-file.ts` | JSON loader: `readCandleFile()` reads the data file, `parseCandleFile()` checks it is a JSON array and validates every row with `parseCandle()`. Returns a typed result, never throws | exists |
 | `backend/src/infrastructure/` | In-memory `CandleRepository` implementation, loaded once at startup | planned |
 | `backend/src/presentation/http/app.ts` | `createApp()`: Express app and routes. Has `GET /health` | exists |
 | `backend/src/presentation/http/app.test.ts` | HTTP tests for `createApp()` with `supertest` | exists |
@@ -122,7 +123,8 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 | `t` format | `formatTimestamp()` returns exactly `YYYY-MM-DDTHH:MM:SSZ`, no milliseconds | exists |
 | Response candle shape | `toApiCandle()` serializes to exactly `{"t":…,"o":…,"h":…,"l":…,"c":…,"v":…}`: key order, no extra keys | exists |
 | Strict `ts` parsing | `parseMinuteTimestamp()` rejects non-ISO formats, offsets, milliseconds, seconds other than 0, and impossible dates | exists |
-| Loader validation | `parseCandleFile()` rejects invalid JSON, non-arrays, and rows with a bad symbol, `ts`, or number, and reports the row index | exists |
+| Row validation | `parseCandle()` accepts a valid row and `high` equal to `low`; rejects non-objects, a bad symbol, a bad `ts`, a non-finite open, high, low, or close, a volume that is not a non-negative integer, and `high` below `low`, each with its own code | exists |
+| Loader validation | `parseCandleFile()` rejects invalid JSON and non-arrays, and reports the index and `parseCandle()` code of the first invalid row | exists |
 | Real dataset | `readCandleFile()` loads all 775 rows of `candles_1m.json` | exists |
 | Invalid input | Each bad `symbol` / `tf` returns `400` with its error code | planned |
 | `/candles` endpoint | Response shape, status codes, and candle order over real HTTP | planned |

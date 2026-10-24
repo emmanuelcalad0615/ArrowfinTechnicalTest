@@ -1,9 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { isInstrument, type Candle } from '../domain/candle.ts'
-import { parseMinuteTimestamp } from '../domain/timestamp.ts'
-
-export type CandleRowError =
-  'NOT_AN_OBJECT' | 'INVALID_SYMBOL' | 'INVALID_TS' | 'INVALID_NUMBER'
+import type { Candle } from '../domain/candle.ts'
+import { parseCandle, type CandleParseError } from '../domain/parse-candle.ts'
 
 export type CandleFileError =
   | { readonly kind: 'READ_FAILED'; readonly message: string }
@@ -12,7 +9,7 @@ export type CandleFileError =
   | {
       readonly kind: 'INVALID_ROW'
       readonly index: number
-      readonly reason: CandleRowError
+      readonly reason: CandleParseError
     }
 
 export type CandleFileResult =
@@ -46,44 +43,14 @@ export function parseCandleFile(text: string): CandleFileResult {
   const rows: readonly unknown[] = data
   const candles: Candle[] = []
   for (const [index, row] of rows.entries()) {
-    const parsed = parseRow(row)
-    if (typeof parsed === 'string') {
+    const parsed = parseCandle(row)
+    if (!parsed.ok) {
       return {
         ok: false,
-        error: { kind: 'INVALID_ROW', index, reason: parsed },
+        error: { kind: 'INVALID_ROW', index, reason: parsed.error },
       }
     }
-    candles.push(parsed)
+    candles.push(parsed.candle)
   }
   return { ok: true, candles }
-}
-
-function parseRow(row: unknown): Candle | CandleRowError {
-  if (!isRecord(row)) return 'NOT_AN_OBJECT'
-
-  const { symbol, ts, open, high, low, close, volume } = row
-  if (!isInstrument(symbol)) return 'INVALID_SYMBOL'
-
-  const start = typeof ts === 'string' ? parseMinuteTimestamp(ts) : null
-  if (start === null) return 'INVALID_TS'
-
-  if (
-    !isFiniteNumber(open) ||
-    !isFiniteNumber(high) ||
-    !isFiniteNumber(low) ||
-    !isFiniteNumber(close) ||
-    !isFiniteNumber(volume)
-  ) {
-    return 'INVALID_NUMBER'
-  }
-
-  return { symbol, ts: start, open, high, low, close, volume }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
 }

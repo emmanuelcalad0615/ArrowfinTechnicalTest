@@ -66,12 +66,12 @@ describe('parseCandleFile', () => {
     {
       label: 'a price that is a string',
       row: { ...validRow, open: '5630' },
-      reason: 'INVALID_NUMBER',
+      reason: 'INVALID_OPEN',
     },
     {
       label: 'a missing volume',
       row: { ...validRow, volume: undefined },
-      reason: 'INVALID_NUMBER',
+      reason: 'INVALID_VOLUME',
     },
   ])('rejects $label', ({ row, reason }) => {
     expect(parseCandleFile(fileWith(row))).toEqual({
@@ -85,7 +85,7 @@ describe('parseCandleFile', () => {
 
     expect(parseCandleFile(text)).toEqual({
       ok: false,
-      error: { kind: 'INVALID_ROW', index: 0, reason: 'INVALID_NUMBER' },
+      error: { kind: 'INVALID_ROW', index: 0, reason: 'INVALID_OPEN' },
     })
   })
 
