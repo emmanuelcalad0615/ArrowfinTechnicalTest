@@ -46,6 +46,8 @@ Technical assessment. Two independent npm projects:
 | `backend/src/presentation/http/app.ts` | `createApp()`: Express app and routes. Has `GET /health` | exists |
 | `backend/src/presentation/http/app.test.ts` | HTTP tests for `createApp()` with `supertest` | exists |
 | `backend/src/presentation/http/api-candle.ts` | `ApiCandle` response type (`t`, `o`, `h`, `l`, `c`, `v`) and `toApiCandle()`, the only place that maps domain names to short keys | exists |
+| `backend/src/presentation/http/api-error.ts` | `ApiErrorCode`, `ApiError`, `ErrorResponse` (`{ error: { code, message } }`), `toErrorResponse()` | exists |
+| `backend/src/presentation/http/candles-query.ts` | `parseCandlesQuery(req.query)`: returns typed `{ symbol, tf }` or an `ApiError` with a stable code and a message that lists the accepted values | exists |
 | `backend/src/presentation/http/` | `/candles` controller, error handler | planned |
 | `frontend/src/main.tsx`, `App.tsx` | Entry point and root component (still the Vite template) | exists |
 | `frontend/src/api/` | API module: calls `GET /candles` | planned |
@@ -87,9 +89,13 @@ Errors return `{ "error": { "code": "...", "message": "..." } }`:
 
 | Status | Code | When |
 | --- | --- | --- |
-| `400` | `INVALID_SYMBOL` | `symbol` is missing, empty, repeated, or not `MES` / `NQ` |
-| `400` | `INVALID_TIMEFRAME` | `tf` is missing, empty, repeated, or not `1m` / `5m` / `15m` / `1h` |
-| `500` | `INTERNAL_ERROR` | Unexpected failure. No internal details in the response |
+| `400` | `MISSING_SYMBOL` | `symbol` is absent or empty. Message lists `MES, NQ` |
+| `400` | `INVALID_SYMBOL` | `symbol` is not exactly `MES` or `NQ` (case-sensitive), or is repeated (`?symbol=MES&symbol=NQ` arrives as an array) |
+| `400` | `MISSING_TIMEFRAME` | `tf` is absent or empty. Message lists `1m, 5m, 15m, 1h` |
+| `400` | `INVALID_TIMEFRAME` | `tf` is not exactly `1m`, `5m`, `15m`, or `1h` (case-sensitive), or is repeated |
+| `500` | `INTERNAL_ERROR` | Unexpected failure. No internal details in the response (planned) |
+
+`symbol` is checked before `tf`: when both are wrong, the response reports the symbol error.
 
 `GET /health` (exists) returns `200` with `{ "status": "ok" }`.
 
@@ -124,6 +130,8 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 | Timeframe guard | `isTimeframe()` accepts only `1m`, `5m`, `15m`, `1h`, case-sensitive; rejects `undefined`, `null`, numbers, and arrays | exists |
 | `t` format | `formatTimestamp()` returns exactly `YYYY-MM-DDTHH:MM:SSZ`, no milliseconds | exists |
 | Response candle shape | `toApiCandle()` serializes to exactly `{"t":…,"o":…,"h":…,"l":…,"c":…,"v":…}`: key order, no extra keys | exists |
+| Error body shape | `toErrorResponse()` serializes to exactly `{"error":{"code":…,"message":…}}` | exists |
+| Query validation | `parseCandlesQuery()` accepts all 8 valid combinations; returns each of the 4 codes with its exact message for absent, empty, unknown, wrong-case, repeated, and object values; reports `symbol` first | exists |
 | Strict `ts` parsing | `parseMinuteTimestamp()` rejects non-ISO formats, offsets, milliseconds, seconds other than 0, and impossible dates | exists |
 | Row validation | `parseCandle()` accepts a valid row and `high` equal to `low`; rejects non-objects, a bad symbol, a bad `ts`, a non-finite open, high, low, or close, a volume that is not a non-negative integer, and `high` below `low`, each with its own code | exists |
 | Loader validation | `parseCandleFile()` rejects invalid JSON and non-arrays, and reports the index and `parseCandle()` code of the first invalid row | exists |
