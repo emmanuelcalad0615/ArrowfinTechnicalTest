@@ -7,19 +7,30 @@ Technical assessment. A TypeScript backend aggregates 1-minute candles into 5m, 
 | `backend/` | Node + TypeScript + Express 5 | `GET /health` and `GET /candles` work |
 | `frontend/` | React 19 + TypeScript + Vite 8 | Still the Vite template |
 
-## Requirements
+## Run with Docker
 
-- Node 24 or later (Node runs the backend `.ts` files directly).
-- npm.
+Requires only Docker with Compose.
 
-## Setup
+```sh
+docker compose up --build
+```
+
+- App: http://localhost:8080 (nginx serves the frontend and forwards `/candles` to the backend).
+- API: http://localhost:3000, for example http://localhost:3000/candles?symbol=MES&tf=5m.
+- Stop with `docker compose down`.
+
+## Run without Docker
+
+Requirements: Node 24 or later (Node runs the backend `.ts` files directly) and npm.
+
+### Setup
 
 ```sh
 cd backend && npm install
 cd ../frontend && npm install
 ```
 
-## Run
+### Run
 
 Start each app in its own terminal:
 
@@ -31,7 +42,7 @@ cd frontend && npm run dev   # http://localhost:5173
 - The backend reads `PORT` (default `3000`). To change it, copy `backend/.env.example` to `backend/.env`.
 - In dev, Vite forwards `/candles` to the backend, so the frontend and the API share one origin.
 
-## Checks
+### Checks
 
 Run these in `backend/` and in `frontend/`:
 

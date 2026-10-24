@@ -27,9 +27,12 @@ Technical assessment. Two independent npm projects:
 | `dataset/candles_1m.json` | Input data: 1-minute candles for `MES` and `NQ`, one session on 2026-08-25 | exists |
 | `dataset/instruments.json` | The 2 contracts: `MES` and `NQ`, with `tick_size` | exists |
 | `DECISIONS.md` | Design decisions, trade-offs, and the prompt log | exists |
+| `compose.yaml` | Runs both images: `backend` on port 3000 (healthcheck on `/health`) and `frontend` on port 8080, which starts once the backend is healthy | exists |
+| `.dockerignore` | Keeps `node_modules`, `dist`, `.env`, `.git`, and `.claude` out of the build context (the repo root) | exists |
 | `.claude/rules/` | Project rules, including this map | exists |
 | `.claude/agents/` | Auditor agents, one per rule file. See `audits.md` | exists |
 | `docs/audits/` | Auditor reports, created on the first audit | planned |
+| `backend/Dockerfile` | `node:26-alpine`, production dependencies only, runs `node src/main.ts` as user `node`, copies `dataset/` next to `backend/` so `DATASET_FILE` resolves | exists |
 | `backend/src/main.ts` | Composition root: validates `PORT`, loads the repository from `DATASET_FILE` (exits with code 1 and a clear message if the file is bad), builds `getCandles`, calls `createApp()`, and listens | exists |
 | `backend/src/domain/candle.ts` | `Candle` type (`ts` in epoch ms, UTC), `SYMBOLS`, `Instrument`, `isInstrument()`, `candleKey()` (symbol + `ts` identity), `byTimeThenSymbol()` comparator | exists |
 | `backend/src/domain/normalize-candles.ts` | `normalizeCandles()`: pure function. Removes duplicates by symbol + `ts` (first appearance wins) and sorts by `ts` ascending. Never modifies its input | exists |
@@ -50,6 +53,7 @@ Technical assessment. Two independent npm projects:
 | `backend/src/presentation/http/candles-query.ts` | `parseCandlesQuery(req.query)`: returns typed `{ symbol, tf }` or an `ApiError` with a stable code and a message that lists the accepted values | exists |
 | `backend/src/presentation/http/candles-controller.ts` | `createCandlesHandler(getCandles)`: thin `GET /candles` handler. Validates the query (`400`), calls the use case, maps with `toCandlesResponse()` (`200`) | exists |
 | `backend/src/presentation/http/error-handlers.ts` | `handleNotFound` (`404 NOT_FOUND`) and `handleError` (`500 INTERNAL_ERROR`, generic message, details only in the server log) | exists |
+| `frontend/Dockerfile`, `frontend/nginx.conf` | Builds with Vite, serves `dist` with `nginx:1.29-alpine`, and proxies `/candles` to `backend:3000` (same role as the Vite dev proxy) | exists |
 | `frontend/src/main.tsx`, `App.tsx` | Entry point and root component (still the Vite template) | exists |
 | `frontend/src/api/` | API module: calls `GET /candles` | planned |
 | `frontend/src/hooks/` | Data-fetching hook: loading, error, empty, and ready states; drops stale requests | planned |
@@ -154,6 +158,7 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 | --- | --- |
 | `backend/` | `npm run dev`, `npm start`, `npm run typecheck`, `npm run lint`, `npm run format`, `npm run format:check`, `npm test`, `npm run test:watch` |
 | `frontend/` | `npm run dev`, `npm run build`, `npm run typecheck`, `npm run lint`, `npm run format`, `npm run format:check` |
+| root | `docker compose up --build` (app on 8080, API on 3000), `docker compose down` |
 
 ## Known debt and pending work
 
