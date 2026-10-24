@@ -1,4 +1,5 @@
-import type { Candle } from '../../domain/candle.ts'
+import type { Candle, Instrument } from '../../domain/candle.ts'
+import type { Timeframe } from '../../domain/timeframe.ts'
 import { formatTimestamp } from '../../domain/timestamp.ts'
 
 /** One candle in the `GET /candles` response. Short keys match the assessment example. */
@@ -20,4 +21,19 @@ export function toApiCandle(candle: Candle): ApiCandle {
     c: candle.close,
     v: candle.volume,
   }
+}
+
+/** Body of `GET /candles`: `{ "symbol", "tf", "candles": [...] }`. */
+export interface CandlesResponse {
+  readonly symbol: Instrument
+  readonly tf: Timeframe
+  readonly candles: readonly ApiCandle[]
+}
+
+export function toCandlesResponse(
+  symbol: Instrument,
+  tf: Timeframe,
+  candles: readonly Candle[],
+): CandlesResponse {
+  return { symbol, tf, candles: candles.map(toApiCandle) }
 }

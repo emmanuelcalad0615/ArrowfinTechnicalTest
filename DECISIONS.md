@@ -52,6 +52,15 @@ Design decisions and trade-offs for this technical assessment, followed by the l
 - **Values match exactly, with no case folding.** `mes` and `5M` are invalid, so each candle set has exactly one URL.
 - **`symbol` is validated before `tf`**, and only the first error is returned, to keep one stable code per response.
 
+### HTTP layer (2026-10-24)
+
+- **The `/candles` controller is thin.** `createCandlesHandler(getCandles)` validates the query with `parseCandlesQuery()`, calls the use case, and maps the result with `toCandlesResponse()`. It has no branching beyond the validation result.
+- **`createApp({ getCandles })` builds the app and never listens.** Tests drive it with `supertest` and fake use cases; `main.ts` is the only place that loads data and calls `listen`.
+- **Unknown routes return `404 NOT_FOUND`, unexpected errors return `500 INTERNAL_ERROR`**, both in the same `{ "error": { "code", "message" } }` body. The 500 message is generic; the error itself goes to `console.error` on the server. The Express default handler is never reached, so no stack trace leaks even outside production.
+- **`express.json()` was removed.** The API only has `GET` routes, and a malformed request body would otherwise have reached the error handler as a `500`.
+- **`main.ts` loads the repository before `listen`.** A missing or invalid data file prints the `CandleFileLoadError` message and exits with code 1, so the server never starts with bad data. Checked by moving the dataset away and running `node src/main.ts`.
+- **`QueryErrorCode` is the subset of `ApiErrorCode` that query validation can return.** Its message table only needs those four codes, while `NOT_FOUND` and `INTERNAL_ERROR` stay in the error handlers.
+
 ## Prompt log
 
 Chronological record of the prompts sent during development. Most prompts were written in Spanish; those entries are English translations.
@@ -373,3 +382,11 @@ Chronological record of the prompts sent during development. Most prompts were w
 > Each error has a stable code in UPPER_SNAKE_CASE and a clear message that says which values are accepted. The codes are MISSING_SYMBOL, INVALID_SYMBOL, MISSING_TIMEFRAME, and INVALID_TIMEFRAME. The error response has the shape { error: { code, message } }.
 >
 > Tests first with each error case and the valid case.
+
+### 30. GET /candles controller and error handling
+
+**Date:** 2026-10-24
+
+> Now the GET /candles controller. It must be thin: it only validates the query, calls the use case, and maps the result to { symbol, tf, candles: [{ t, o, h, l, c, v }] }, with t in ISO 8601 UTC. A validation error responds 400.
+>
+> Split app creation into a function createApp(dependencies) that does not call listen, so it can be tested with supertest without starting the server. Add an error middleware at the end that responds 500 with a generic { error: { code: "INTERNAL_ERROR", message } }, with no stack traces or internal details, and a handler for routes that do not exist that responds 404 with the same error format.

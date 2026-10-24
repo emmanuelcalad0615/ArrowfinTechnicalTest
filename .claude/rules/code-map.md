@@ -30,7 +30,7 @@ Technical assessment. Two independent npm projects:
 | `.claude/rules/` | Project rules, including this map | exists |
 | `.claude/agents/` | Auditor agents, one per rule file. See `audits.md` | exists |
 | `docs/audits/` | Auditor reports, created on the first audit | planned |
-| `backend/src/main.ts` | Composition root: reads `PORT`, wires dependencies, starts the server | exists |
+| `backend/src/main.ts` | Composition root: validates `PORT`, loads the repository from `DATASET_FILE` (exits with code 1 and a clear message if the file is bad), builds `getCandles`, calls `createApp()`, and listens | exists |
 | `backend/src/domain/candle.ts` | `Candle` type (`ts` in epoch ms, UTC), `SYMBOLS`, `Instrument`, `isInstrument()`, `candleKey()` (symbol + `ts` identity), `byTimeThenSymbol()` comparator | exists |
 | `backend/src/domain/normalize-candles.ts` | `normalizeCandles()`: pure function. Removes duplicates by symbol + `ts` (first appearance wins) and sorts by `ts` ascending. Never modifies its input | exists |
 | `backend/src/domain/parse-candle.ts` | `parseCandle()`: validates one raw row with type guards and returns a `Candle` or the first broken rule as a field-specific code (`INVALID_OPEN`, `INVALID_VOLUME`, `HIGH_BELOW_LOW`, ...) | exists |
@@ -42,32 +42,35 @@ Technical assessment. Two independent npm projects:
 | `backend/src/infrastructure/candle-file.ts` | JSON loader: `readCandleFile()` reads the data file, `parseCandleFile()` checks it is a JSON array and validates every row with `parseCandle()`. Returns a typed result, never throws | exists |
 | `backend/src/infrastructure/in-memory-candle-repository.ts` | `DATASET_FILE` (fixed path, resolved from the module, not the cwd), `loadCandleRepository()` (reads and validates once, groups by symbol, throws `CandleFileLoadError` naming the problem and row), `createInMemoryCandleRepository()` | exists |
 | `backend/src/infrastructure/fixtures/` | Small JSON files for loader tests: valid, broken JSON, not an array, invalid row. Excluded from Prettier | exists |
-| `backend/src/presentation/http/app.ts` | `createApp()`: Express app and routes. Has `GET /health` | exists |
-| `backend/src/presentation/http/app.test.ts` | HTTP tests for `createApp()` with `supertest` | exists |
-| `backend/src/presentation/http/api-candle.ts` | `ApiCandle` response type (`t`, `o`, `h`, `l`, `c`, `v`) and `toApiCandle()`, the only place that maps domain names to short keys | exists |
-| `backend/src/presentation/http/api-error.ts` | `ApiErrorCode`, `ApiError`, `ErrorResponse` (`{ error: { code, message } }`), `toErrorResponse()` | exists |
+| `backend/src/presentation/http/app.ts` | `createApp({ getCandles })`: builds the Express app without listening. Routes `GET /health` and `GET /candles`, then the 404 handler and the error handler | exists |
+| `backend/src/presentation/http/app.test.ts` | HTTP tests for `createApp()` with `supertest`: fake use cases, plus one test against the real dataset | exists |
+| `backend/src/presentation/http/api-candle.ts` | `ApiCandle` (`t`, `o`, `h`, `l`, `c`, `v`), `toApiCandle()` (the only place that maps domain names to short keys), `CandlesResponse` and `toCandlesResponse()` | exists |
+| `backend/src/presentation/http/api-error.ts` | `QueryErrorCode`, `ApiErrorCode` (adds `NOT_FOUND`, `INTERNAL_ERROR`), `ApiError`, `ErrorResponse` (`{ error: { code, message } }`), `toErrorResponse()` | exists |
 | `backend/src/presentation/http/candles-query.ts` | `parseCandlesQuery(req.query)`: returns typed `{ symbol, tf }` or an `ApiError` with a stable code and a message that lists the accepted values | exists |
-| `backend/src/presentation/http/` | `/candles` controller, error handler | planned |
+| `backend/src/presentation/http/candles-controller.ts` | `createCandlesHandler(getCandles)`: thin `GET /candles` handler. Validates the query (`400`), calls the use case, maps with `toCandlesResponse()` (`200`) | exists |
+| `backend/src/presentation/http/error-handlers.ts` | `handleNotFound` (`404 NOT_FOUND`) and `handleError` (`500 INTERNAL_ERROR`, generic message, details only in the server log) | exists |
 | `frontend/src/main.tsx`, `App.tsx` | Entry point and root component (still the Vite template) | exists |
 | `frontend/src/api/` | API module: calls `GET /candles` | planned |
 | `frontend/src/hooks/` | Data-fetching hook: loading, error, empty, and ready states; drops stale requests | planned |
 | `frontend/src/components/` | Symbol selector, timeframe selector, candle chart | planned |
 
-## Request path (planned)
+## Request path
+
+Steps 4 to 8 exist; the frontend steps are planned.
 
 1. User changes the symbol or timeframe `<select>`.
 2. The hook cancels the previous request and calls the API module.
 3. The API module sends `GET /candles?symbol=MES&tf=5m`.
-4. The controller passes the query to domain validation. Invalid input returns `400`.
+4. The controller validates the query with `parseCandlesQuery()`, which uses the domain guards. Invalid input returns `400`.
 5. The controller calls the use case.
 6. The use case reads 1-minute candles through `CandleRepository`. The infrastructure implementation serves them from memory.
-7. Domain logic deduplicates, sorts, and aggregates the candles into `tf` buckets.
+7. `aggregate()` deduplicates, sorts, and aggregates the candles into `tf` intervals.
 8. The controller maps the result to the response JSON and returns `200`.
 9. The hook moves to the ready or empty state, and the chart renders.
 
-## `GET /candles` (planned)
+## `GET /candles`
 
-The shape is decided (see `DECISIONS.md`): an object with `symbol`, `tf`, and `candles`, where each candle is an `ApiCandle` built by `toApiCandle()`. Once the endpoint exists, `no-regression.md` freezes it.
+The endpoint exists, so `no-regression.md` freezes this contract: shape, status codes, error codes and messages, accepted values, and candle order.
 
 ```json
 {
@@ -92,7 +95,8 @@ Errors return `{ "error": { "code": "...", "message": "..." } }`:
 | `400` | `INVALID_SYMBOL` | `symbol` is not exactly `MES` or `NQ` (case-sensitive), or is repeated (`?symbol=MES&symbol=NQ` arrives as an array) |
 | `400` | `MISSING_TIMEFRAME` | `tf` is absent or empty. Message lists `1m, 5m, 15m, 1h` |
 | `400` | `INVALID_TIMEFRAME` | `tf` is not exactly `1m`, `5m`, `15m`, or `1h` (case-sensitive), or is repeated |
-| `500` | `INTERNAL_ERROR` | Unexpected failure. No internal details in the response (planned) |
+| `404` | `NOT_FOUND` | Any route that does not exist. Message: `Route not found.` |
+| `500` | `INTERNAL_ERROR` | Unexpected failure. Message: `An unexpected error occurred.` No stack trace or internal detail; the error is logged on the server |
 
 `symbol` is checked before `tf`: when both are wrong, the response reports the symbol error.
 
@@ -137,8 +141,9 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 | Real dataset | `readCandleFile()` and `loadCandleRepository(DATASET_FILE)` load all 775 rows of `dataset/candles_1m.json` | exists |
 | Repository loading | Loads a valid fixture grouped by symbol; keeps serving after the file is deleted (read once); throws `CandleFileLoadError` with a clear message for a missing file, broken JSON, a non-array, and an invalid row (index and code); empty list for a symbol with no candles | exists |
 | Get candles use case | With a fake repository: returns only the requested symbol, and aggregates into the requested timeframe | exists |
-| Invalid input | Each bad `symbol` / `tf` returns `400` with its error code | planned |
-| `/candles` endpoint | Response shape, status codes, and candle order over real HTTP | planned |
+| `/candles` endpoint | Over real HTTP: `200` with the exact JSON string and `application/json`; the use case gets `symbol` and `tf`; `200` with `candles: []`; `400` for each query code without calling the use case; the real dataset comes back sorted with ISO `t` | exists |
+| Unknown routes | `404` with `{ error: { code: "NOT_FOUND", ... } }` | exists |
+| Unexpected errors | A throwing use case gives `500` with the exact generic body, no internal detail, and a server log entry | exists |
 
 ## Commands
 
@@ -149,7 +154,5 @@ Runner: Vitest + `supertest`, backend only. Test files sit next to the code as `
 
 ## Known debt and pending work
 
-- Backend has no custom error handler.
 - Frontend is still the Vite template.
-- `main.ts` does not load the repository yet. It will, together with the `/candles` endpoint, so a bad data file stops the server at startup.
 - Not decided: how the frontend gets the response types without duplicating them.

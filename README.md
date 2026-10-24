@@ -4,7 +4,7 @@ Technical assessment. A TypeScript backend aggregates 1-minute candles into 5m, 
 
 | Part | Stack | Status |
 | --- | --- | --- |
-| `backend/` | Node + TypeScript + Express 5 | `GET /health` works. `GET /candles` is in progress |
+| `backend/` | Node + TypeScript + Express 5 | `GET /health` and `GET /candles` work |
 | `frontend/` | React 19 + TypeScript + Vite 8 | Still the Vite template |
 
 ## Requirements
@@ -47,7 +47,7 @@ npm test              # backend only
 | Endpoint | Status |
 | --- | --- |
 | `GET /health` | Returns `200` with `{ "status": "ok" }` |
-| `GET /candles?symbol=MES\|NQ&tf=1m\|5m\|15m\|1h` | In progress |
+| `GET /candles?symbol=MES\|NQ&tf=1m\|5m\|15m\|1h` | Returns `200` with `{ "symbol", "tf", "candles": [{ "t", "o", "h", "l", "c", "v" }] }`, sorted oldest to newest, `t` in ISO 8601 UTC. Invalid input returns `400` with `{ "error": { "code", "message" } }` |
 
 ## Project layout
 
