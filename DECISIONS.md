@@ -47,6 +47,10 @@ Design decisions and trade-offs for this technical assessment, followed by the l
   - It can grow by adding fields without breaking existing clients.
   - The frontend can check that `symbol` and `tf` match the current selection before it shows the data.
   - Rejected alternative: a bare array of candles. It is shorter, but any new field would change the top-level type and break every client, and the response would not say which selection it answers.
+- **Query errors have stable codes and messages that list the accepted values.** `MISSING_SYMBOL`, `INVALID_SYMBOL`, `MISSING_TIMEFRAME`, and `INVALID_TIMEFRAME`, always in the body `{ "error": { "code", "message" } }`. The messages are built from `SYMBOLS` and `TIMEFRAMES`, so they cannot drift from what the guards accept.
+- **An empty value counts as missing; a repeated value counts as invalid.** `?symbol=` gets `MISSING_SYMBOL`. Express 5 turns `?tf=5m&tf=1h` (and even `?tf=5m&tf=5m`) into an array, which the guards reject as `INVALID_TIMEFRAME`. This was checked against a real Express app, not only with plain objects.
+- **Values match exactly, with no case folding.** `mes` and `5M` are invalid, so each candle set has exactly one URL.
+- **`symbol` is validated before `tf`**, and only the first error is returned, to keep one stable code per response.
 
 ## Prompt log
 
@@ -359,3 +363,13 @@ Chronological record of the prompts sent during development. Most prompts were w
 > Now the getCandles use case in the application layer. It receives the repository by injection in the constructor or as a parameter, and given an Instrument and a Timeframe it returns the aggregated candles. It knows nothing about HTTP.
 >
 > Tests first with a fake in-memory repository, without touching the real file. One that checks it only returns candles of the requested symbol and another that checks it applies the right timeframe.
+
+### 29. Query validation
+
+**Date:** 2026-10-24
+
+> Now in the presentation layer, a function that validates req.query and returns typed { symbol, tf } or an error. Watch out: in Express a repeated parameter such as ?tf=5m&tf=1h arrives as an array, so that is also invalid. Values are accepted exactly, without normalizing upper or lower case.
+>
+> Each error has a stable code in UPPER_SNAKE_CASE and a clear message that says which values are accepted. The codes are MISSING_SYMBOL, INVALID_SYMBOL, MISSING_TIMEFRAME, and INVALID_TIMEFRAME. The error response has the shape { error: { code, message } }.
+>
+> Tests first with each error case and the valid case.

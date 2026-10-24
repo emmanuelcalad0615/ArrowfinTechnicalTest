@@ -38,7 +38,6 @@ Technical assessment. Two independent npm projects:
 | `backend/src/domain/timestamp.ts` | `formatTimestamp()` (epoch ms to `2026-08-25T14:00:00Z`) and `parseMinuteTimestamp()` (strict ISO 8601 UTC minute to epoch ms, or `null`) | exists |
 | `backend/src/domain/aggregate-candles.ts` | `aggregate()`: pure function. Normalizes with `normalizeCandles()`, then aggregates 1-minute candles into `tf` intervals with `bucketStart()` | exists |
 | `backend/src/domain/candle-repository.ts` | `CandleRepository` interface: `findBySymbol(symbol)` returns the stored 1-minute candles of one symbol | exists |
-| `backend/src/domain/` | Query validation | planned |
 | `backend/src/application/get-candles.ts` | `createGetCandles(repository)` returns the `GetCandles` use case: `(symbol, timeframe)` to aggregated candles. Repository injected; knows nothing of HTTP | exists |
 | `backend/src/infrastructure/candle-file.ts` | JSON loader: `readCandleFile()` reads the data file, `parseCandleFile()` checks it is a JSON array and validates every row with `parseCandle()`. Returns a typed result, never throws | exists |
 | `backend/src/infrastructure/in-memory-candle-repository.ts` | `DATASET_FILE` (fixed path, resolved from the module, not the cwd), `loadCandleRepository()` (reads and validates once, groups by symbol, throws `CandleFileLoadError` naming the problem and row), `createInMemoryCandleRepository()` | exists |
