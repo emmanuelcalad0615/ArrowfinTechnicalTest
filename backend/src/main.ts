@@ -11,10 +11,10 @@ function parsePort(value: string | undefined): number | null {
 const port = parsePort(process.env.PORT)
 
 if (port === null) {
-  console.error(`Invalid PORT: "${process.env.PORT}"`)
+  console.error('Invalid PORT:', process.env.PORT)
   process.exit(1)
 }
 
 createApp().listen(port, () => {
-  console.log(`Backend listening on http://localhost:${port}`)
+  console.log(`Backend listening on http://localhost:${String(port)}`)
 })
